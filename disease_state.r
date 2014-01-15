@@ -3,7 +3,7 @@ cat("(disease_state.r) Getting disease information!\n")
 
 library(foreign)
 
-meds<-read.xport("/Users/stephanie/winter/disease/MCQ_G.XPT")
+meds<-read.xport("disease/MCQ_G.XPT")
 individuals<-meds$"SEQN"
 
 # note: for all of these, 1 means yes and 2 means no
