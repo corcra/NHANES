@@ -6,8 +6,8 @@ do_kmeans<-FALSE
 do_heatmap<-FALSE
 do_cluster_enrich<-FALSE
 only_cancer<-FALSE
-do_logistic<-FALSE
-do_supervised<-TRUE
+do_logistic<-TRUE
+do_supervised<-FALSE
 
 library(cluster)
 library(gplots)
@@ -168,7 +168,7 @@ if(do_cluster_enrich){
 }
 
 get_logistic<-function(x,cancer_status,demo){
-    cat("get_logistic has been called\n")
+#    cat("get_logistic has been called\n")
     if((mean(is.na(x))>0.9|length(levels(x))==1)){
         return(1)
     }
@@ -179,7 +179,9 @@ get_logistic<-function(x,cancer_status,demo){
         lfit<-glm(cancer_status ~ x, family=binomial)
         index<-2
     }
-    p_val<-anova(lfit,test="Chisq")$"Pr(>Chi)"[index]
+#   the anova way is testing if including the covariate is significant...
+#    p_val<-anova(lfit,test="Chisq")$"Pr(>Chi)"[index]
+    p_val<-coefficients(summary(lfit))["x",4]
     #cat(mean(is.na(x)),p_val,"\n")
     return(p_val)
 }
@@ -202,8 +204,8 @@ if(do_logistic){
     bonf<-0.05/ncol(data)
     which_sig<-which(logit_p_vals<=bonf)
     sig<-logit_p_vals[which_sig]
-    #cat("Significant hits:\n")
-    #print(sig)
+    cat("Significant hits:\n")
+    print(sig)
 
     which_sig_nodemo<-which(logit_p_vals_nodemo<=bonf)
     sig_nodemo<-logit_p_vals_nodemo[which_sig_nodemo]
