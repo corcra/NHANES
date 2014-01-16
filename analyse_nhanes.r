@@ -18,9 +18,14 @@ if(data_type=="lab"){
     # the high qual data is all the continuous measurements (hopefully)
     non_categorical<-colnames(data)
 } else if(data_type=="enviro"){
-    data<-read.table("enviro/enviro_data.txt",header=T,row.names=1)
+#    data<-read.table("enviro/enviro_data.txt",header=T,row.names=1)
+    data<-read.table("enviro/enviro_non_cat.txt",header=T,row.names=1)
     # for enviro data, assume categorical unless in this list...
-    non_categorical<-c("ALQ120Q","ALQ130U","ALQ130","ALQ141Q","ALQ155","BPD035","BPD058","CKQ070Q","DEQ038G","DEQ038Q","DED120","DED125","DID040","DID060","DID250","DID260","DIQ280","DIQ300S","DIQ300D","DID310S","DID310D","DID320","DID330","DID341","DID350","DUQ210","DUQ213","DUQ215Q","DUQ220Q","DUQ230","DUQ260","DUQ270Q","DUQ280","DUQ300","DUQ310Q","DUQ320","DUQ340","DUQ350Q","DUQ360","DUQ390","DUQ400Q","ECD010","ECD070A","ECD070B","HUD080","HOD050","IMQ090","PAQ706","PAQ610","PAD615","PAQ625","PAD630","PAQ640","PAD645","PAQ655","PAD660","PAQ670","PAD675","PAD680","RXQ525Q","RXD530","RDD040","RDD060","RDQ080","RDD120","SXD031","SXD171","SXD510","SXQ824","SXQ827","SXD633","SXQ636","SXQ639","SXD642","SXQ410","SXQ550","SXQ836","SXQ841","SXD621","SXQ624","SXQ627","SXD630","SXQ590","SXQ600","SXD101","SXD450","SXQ724","SXQ727","SXQ130","SXQ490","SLD010H","SMD030","SMQ050Q","SMD055","SMD057","SMD641","SMD650","SMDUPCA","SMD100BR","SMD100TR","SMD100NI","SMD100CO","SMD630","SMD430","SMQ710","SMQ720","SMQ740","SMQ750","SMQ770","SMQ780","SMQ800","SMQ817","SMQ830")
+#    non_categorical<-c("ALQ120Q","ALQ130U","ALQ130","ALQ141Q","ALQ155","BPD035","BPD058","CKQ070Q","DEQ038G","DEQ038Q","DED120","DED125","DID040","DID060","DID250","DID260","DIQ280","DIQ300S","DIQ300D","DID310S","DID310D","DID320","DID330","DID341","DID350","DUQ210","DUQ213","DUQ215Q","DUQ220Q","DUQ230","DUQ260","DUQ270Q","DUQ280","DUQ300","DUQ310Q","DUQ320","DUQ340","DUQ350Q","DUQ360","DUQ390","DUQ400Q","ECD010","ECD070A","ECD070B","HUD080","HOD050","IMQ090","PAQ706","PAQ610","PAD615","PAQ625","PAD630","PAQ640","PAD645","PAQ655","PAD660","PAQ670","PAD675","PAD680","RXQ525Q","RXD530","RDD040","RDD060","RDQ080","RDD120","SXD031","SXD171","SXD510","SXQ824","SXQ827","SXD633","SXQ636","SXQ639","SXD642","SXQ410","SXQ550","SXQ836","SXQ841","SXD621","SXQ624","SXQ627","SXD630","SXQ590","SXQ600","SXD101","SXD450","SXQ724","SXQ727","SXQ130","SXQ490","SLD010H","SMD030","SMQ050Q","SMD055","SMD057","SMD641","SMD650","SMD100TR","SMD100NI","SMD100CO","SMD630","SMD430","SMQ710","SMQ720","SMQ740","SMQ750","SMQ770","SMQ780","SMQ800","SMQ817","SMQ830")
+    # in no particular order...
+#    cat<-c("SMD100BR","SMDUPCA")
+#    for now, using 'high qual' data
+    non_categorical<-colnames(data)
 } else {
     cat("Data type must be one of 'lab' or 'enviro'!\n")
     quit("no")
@@ -50,6 +55,7 @@ data<-data[rowMeans(is.na(data))<0.8,]
 data<-data[,colMeans(is.na(data))<0.8]
 
 # now scale data (also turn to categorical...)
+# seems to be not a great idea right now
 z_standard<-function(x){
     col<-data[,x]
     if(x %in% non_categorical){
@@ -223,5 +229,16 @@ if(do_supervised){
     fit_model<-glm(Cancer~.,family=binomial,data=fit_data)
 
     vali_data<-data.frame(Demo=testing_demo,Data=testing_data)
-    test_predictions<-predict(fit_model,newdata=vali_data,type="response")
+    test_predictions<-predict(fit_model,newdata=vali_data,type="response",se.fit=TRUE,na.action="na.omit")
+    pred_vals<-1*(test_predictions$fit>=0.5)
+    true_vals<-1*(disease_state[names(test_predictions$fit),"cancer"]==1)
+    
+    tp<-sum(pred_vals==1&true_vals==1,na.rm=TRUE)
+    fp<-sum(pred_vals==1&true_vals==0,na.rm=TRUE)
+    tn<-sum(pred_vals==0&true_vals==0,na.rm=TRUE)
+    fn<-sum(pred_vals==0&true_vals==1,na.rm=TRUE)
+
+    sens<-tp/(tp+fn)
+    spec<-tn/(fp+tn)
+
 }
