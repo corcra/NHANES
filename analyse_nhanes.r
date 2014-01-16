@@ -210,10 +210,13 @@ if(do_logistic){
 }
 
 # --- supervised analysis --- #
+# right now, this doesn't seem to work for the enviro option, and I'm not sure why... probably too many NAs?
 if(do_supervised){
     cat("Performing supervised analysis!\n")
     # first, take a training set...
-    training<-sample(seq(nrow(data)),floor(0.9*nrow(data)))
+    train_frac<-0.5
+    cat("Fraction of dataset used for training:",train_frac,"\n")
+    training<-sample(seq(nrow(data)),floor(train_frac*nrow(data)))
     # not sure how well this takes categorical data
     training_data<-as.matrix(data[training,])
     training_cancer<-1*(disease_state[rownames(training_data),"cancer"]==1)
@@ -226,6 +229,7 @@ if(do_supervised){
     # now fit a model based on the training data
    
     fit_data<-data.frame(Cancer=training_cancer,Demo=training_demo,Data=training_data)
+    browser()
     fit_model<-glm(Cancer~.,family=binomial,data=fit_data)
 
     vali_data<-data.frame(Demo=testing_demo,Data=testing_data)
@@ -238,7 +242,7 @@ if(do_supervised){
     tn<-sum(pred_vals==0&true_vals==0,na.rm=TRUE)
     fn<-sum(pred_vals==0&true_vals==1,na.rm=TRUE)
 
-    sens<-tp/(tp+fn)
-    spec<-tn/(fp+tn)
-
+    sens<-tp/(tp+fn)*100
+    spec<-tn/(fp+tn)*100
+    cat("Senstivity: ",sens,"%\nSpecificity: ",spec,"%\n",sep="")
 }
