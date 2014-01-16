@@ -218,7 +218,10 @@ if(do_supervised){
     testing_cancer[is.na(testing_cancer)]<-0
     testing_demo<-demographics[rownames(testing_data),]
     # now fit a model based on the training data
-    trained_model<-glm(training_cancer ~ training_demo + training_data, family=binomial)
-   # trained_model<-glm(formula=cancer ~ dem + dat,data=data.frame(dem=training_demo,dat=training_data),family=binomial)
-    test_predictions<-predict(trained_model,newdata=data.frame(training_demo=testing_demo,training_data=testing_data),type="response")
+   
+    fit_data<-data.frame(Cancer=training_cancer,Demo=training_demo,Data=training_data)
+    fit_model<-glm(Cancer~.,family=binomial,data=fit_data)
+
+    vali_data<-data.frame(Demo=testing_demo,Data=testing_data)
+    test_predictions<-predict(fit_model,newdata=vali_data,type="response")
 }
