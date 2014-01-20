@@ -5,7 +5,6 @@ xpt_files<-list.files(pattern='*.XPT')
 # arbitrary...
 master<-data.frame(rep(NA,4))
 names(master)<-"SEQN"
-first<-1
 cat("Merging!\n")
 for (xpt in xpt_files){
     xpt_file<-read.xport(xpt)
