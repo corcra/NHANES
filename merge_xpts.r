@@ -1,6 +1,11 @@
 library(foreign)
 
 xpt_files<-list.files(pattern='*.XPT')
+data_type<-readline("Data type? (lab/enviro) ")
+if(!(data_type=="lab"|data_type=="enviro")){
+    cat("Data type must be one of 'lab' or 'enviro'!\n")
+    quit("no")
+}
 
 # arbitrary...
 master<-data.frame(rep(NA,4))
@@ -35,10 +40,15 @@ for (name in uniqs){
 # exterminate!
 to_keep<-setdiff(names(master),to_lose)
 master<-subset(master,select=to_keep)
+
+# some of the rows have NA seq number somehow
+master<-master[!is.na(master$"SEQN"),]
+
 # fix labelling
 colnames(master)<-gsub(".x[.1-9]*","",colnames(master))
 
 # save
-filename<-"lab_data_all.txt"
+filename<-paste(data_type,"_data.txt",sep="")
 cat("Saving to",filename,"\n")
 write.table(master,file=filename,row.names=master$"SEQN",col.names=T,quote=FALSE)
+#write.table(master,file=filename,col.names=T,quote=FALSE)
