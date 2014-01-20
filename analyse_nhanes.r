@@ -14,22 +14,20 @@ library(gplots)
 
 data_type<-readline("Data type? (lab/enviro) ")
 if(data_type=="lab"){
-    data<-read.table("lab/lab_data_high_qual.txt",header=T,row.names=1)
-    # the high qual data is all the continuous measurements (hopefully)
-    non_categorical<-colnames(data)
+    data<-read.table("lab/lab_data.txt",header=T,row.names=1)
+    continuous<-read.table("lab/lab_cont.txt",as.is=TRUE)[,1]
 } else if(data_type=="enviro"){
-#    data<-read.table("enviro/enviro_data.txt",header=T,row.names=1)
-    data<-read.table("enviro/enviro_non_cat.txt",header=T,row.names=1)
-    # for enviro data, assume categorical unless in this list...
-#    non_categorical<-c("ALQ120Q","ALQ130U","ALQ130","ALQ141Q","ALQ155","BPD035","BPD058","CKQ070Q","DEQ038G","DEQ038Q","DED120","DED125","DID040","DID060","DID250","DID260","DIQ280","DIQ300S","DIQ300D","DID310S","DID310D","DID320","DID330","DID341","DID350","DUQ210","DUQ213","DUQ215Q","DUQ220Q","DUQ230","DUQ260","DUQ270Q","DUQ280","DUQ300","DUQ310Q","DUQ320","DUQ340","DUQ350Q","DUQ360","DUQ390","DUQ400Q","ECD010","ECD070A","ECD070B","HUD080","HOD050","IMQ090","PAQ706","PAQ610","PAD615","PAQ625","PAD630","PAQ640","PAD645","PAQ655","PAD660","PAQ670","PAD675","PAD680","RXQ525Q","RXD530","RDD040","RDD060","RDQ080","RDD120","SXD031","SXD171","SXD510","SXQ824","SXQ827","SXD633","SXQ636","SXQ639","SXD642","SXQ410","SXQ550","SXQ836","SXQ841","SXD621","SXQ624","SXQ627","SXD630","SXQ590","SXQ600","SXD101","SXD450","SXQ724","SXQ727","SXQ130","SXQ490","SLD010H","SMD030","SMQ050Q","SMD055","SMD057","SMD641","SMD650","SMD100TR","SMD100NI","SMD100CO","SMD630","SMD430","SMQ710","SMQ720","SMQ740","SMQ750","SMQ770","SMQ780","SMQ800","SMQ817","SMQ830")
-    # in no particular order...
-#    cat<-c("SMD100BR","SMDUPCA")
-#    for now, using 'high qual' data
-    non_categorical<-colnames(data)
+    data<-read.table("enviro/enviro_data.txt",header=T,row.names=1)
+    continuous<-read.table("enviro/enviro_cont.txt",as.is=TRUE)[,1]
 } else {
     cat("Data type must be one of 'lab' or 'enviro'!\n")
     quit("no")
 }
+# restricting to continuous data, for now...
+keep_cont<-intersect(colnames(data),continuous)
+data<-subset(data,select=keep_cont)
+# this is kinda redundant until i deal with categorical data properly
+non_categorical<-colnames(data)
 
 cat("Getting disease and demographic information!\n")
 # get disease state
@@ -39,6 +37,9 @@ demo_full<-read.xport("demo/DEMO_G.XPT")
 # this is just gender, age, race
 demographics<-demo_full[,c("RIAGENDR","RIDAGEYR","RIDRETH3")]
 rownames(demographics)<-demo_full[,"SEQN"]
+d<-apply(demographics,2,as.factor)
+demographics<-data.frame(d[,1],demographics[,2],d[,3])
+colnames(demographics)<-c("sex","age","ethnicity")
 
 # restrict to cancer-diagnosed individuals
 if(only_cancer){
@@ -59,6 +60,25 @@ data<-data[,colMeans(is.na(data))<0.8]
 z_standard<-function(x){
     col<-data[,x]
     if(x %in% non_categorical){
+        # first: get rid of refused/missing... this will hit some true values most likely, but it shouldn't be the worst...
+        missing<-NULL
+        # what we're looking for is the max value being 9 or 99 or 999 or 9999 or 99999 (hopefully nothing higher than that)
+        max_val<-max(col,na.rm=TRUE)
+        # weird weird formatting here
+        if(max_val==(9)|(max_val==7)){
+            missing<-which(col==9|col==7)
+        } else if(max_val==(99)|(max_val==77)){
+            missing<-which(col==99|col==77)
+        } else if(max_val==(999)|(max_val==777)){
+            missing<-which(col==999|col==777)
+        } else if(max_val==(9999)|(max_val==7777)){
+            missing<-which(col==9999|col==7777)
+        } else if(max_val==(99999)|(max_val==77777)){
+            missing<-which(col==99999|col==77777)
+        }
+
+        col[missing]<-NA
+
         # even still, this isn't exactly perfect...
         mu<-mean(col,na.rm=TRUE)
         sigma<-sd(col,na.rm=TRUE)
@@ -73,8 +93,8 @@ data_temp<-data.frame(data_new)
 colnames(data_temp)<-colnames(data)
 rownames(data_temp)<-rownames(data)
 data<-data_temp
-#data<-apply(data,2,z_standard)
-#data2<-data.matrix(scale(data))
+rm(data_temp)
+rm(data_new)
 
 # restrict to my list of individuals
 my_indiv<-rownames(data)
@@ -85,7 +105,7 @@ if(only_cancer){
 } else{
     bg_failure<-colSums(disease_state==2,na.rm=TRUE)
 }
-demographics<-data.matrix(demographics[my_indiv,])
+demographics<-demographics[my_indiv,]
 
 # get cancer status
 if(!only_cancer){
@@ -168,47 +188,60 @@ if(do_cluster_enrich){
 }
 
 get_logistic<-function(x,cancer_status,demo){
-#    cat("get_logistic has been called\n")
     if((mean(is.na(x))>0.9|length(levels(x))==1)){
         return(1)
     }
     if(demo==1){
-        lfit<-glm(cancer_status ~ demographics + x, family=binomial)
-        index<-3
+        lfit<-glm(cancer_status ~ sex + age + ethnicity + x, family=binomial,data=demographics)
+        sex_assoc<-coefficients(summary(lfit))["sex2",4]
+        age_assoc<-coefficients(summary(lfit))["age",4]
     } else{
         lfit<-glm(cancer_status ~ x, family=binomial)
-        index<-2
+        sex_assoc<-1
+        age_assoc<-1
     }
 #   the anova way is testing if including the covariate is significant...
 #    p_val<-anova(lfit,test="Chisq")$"Pr(>Chi)"[index]
     p_val<-coefficients(summary(lfit))["x",4]
-    #cat(mean(is.na(x)),p_val,"\n")
-    return(p_val)
+    return(list("p_var"=p_val,"p_sex"=sex_assoc,"p_age"=age_assoc))
 }
 
-logit_p_vals<-NULL
-logit_p_vals_nodemo<-NULL
+var_p_vals<-1
+var_p_vals_nodemo<-1
+sex_p_vals<-1
+age_p_vals<-1
+
 if(do_logistic){
     cat("Checking each measurement for cancer association (logistic)!\n")
-    for (i in 1:ncol(data)){
+    for (i in 2:ncol(data)){
         if(i%%5==0){
             cat(100*i/ncol(data),"%\n",sep="")
         }
         col<-data[,i]
-        logit_p_vals<-c(logit_p_vals,get_logistic(col,cancer_status,1))
-        logit_p_vals_nodemo<-c(logit_p_vals,get_logistic(col,cancer_status,0))
-        }
-    names(logit_p_vals)<-colnames(data)
-    names(logit_p_vals_nodemo)<-colnames(data)
+        p_vals<-get_logistic(col,cancer_status,1)
+        var_p_vals<-c(var_p_vals,p_vals$"p_var")
+        sex_p_vals<-c(sex_p_vals,p_vals$"p_sex")
+        age_p_vals<-c(age_p_vals,p_vals$"p_age")
+        p_vals_nodemo<-get_logistic(col,cancer_status,0)
+        var_p_vals_nodemo<-c(var_p_vals_nodemo,p_vals_nodemo$"p_var")
+    }
+    names(var_p_vals)<-colnames(data)
+    names(sex_p_vals)<-colnames(data)
+    names(age_p_vals)<-colnames(data)
+    names(var_p_vals_nodemo)<-colnames(data)
 
     bonf<-0.05/ncol(data)
-    which_sig<-which(logit_p_vals<=bonf)
-    sig<-logit_p_vals[which_sig]
+    which_sig<-which(var_p_vals<=bonf)
+    sig<-var_p_vals[which_sig]
     cat("Significant hits:\n")
     print(sig)
 
-    which_sig_nodemo<-which(logit_p_vals_nodemo<=bonf)
-    sig_nodemo<-logit_p_vals_nodemo[which_sig_nodemo]
+    which_sig_nodemo<-which(var_p_vals_nodemo<=bonf)
+    sig_nodemo<-var_p_vals_nodemo[which_sig_nodemo]
+}
+
+shist<-function(x,name){
+    hist(x,col="deepskyblue2",breaks=50,main=name,xlab="p value")
 }
 
 # --- supervised analysis --- #
